@@ -1,0 +1,40 @@
+// Window Access -- sliding window array access pattern benchmark
+// Measures cache-line crossing and pseudo-random offset access.
+package basalt
+
+import std.core.ptr.Ptr
+import std.core.arena.Arena
+
+struct Pixel {
+    r: i32,
+    g: i32,
+    b: i32
+}
+
+pub fn main(argc: i32) -> i32 {
+    let N: i64 = 10000000;
+    let a = Arena::new(N * 12);
+    let pixels = a.alloc_array::<Pixel>(N);
+
+    for i in 0..N {
+        pixels[i].r = (i as i32) + argc;
+        pixels[i].g = (i as i32) * 2;
+        pixels[i].b = (i as i32) ^ argc;
+    }
+
+    let mut sum: i64 = 0;
+    let mut idx: i64 = (argc as i64) & (N - 1);
+    let mask = N - 1;
+
+    for i in 0..100000000 {
+        let p = pixels.offset(idx);
+        let r = p.r;
+        let g = p.g;
+        let b = p.b;
+        sum += (r as i64) + (g as i64) + (b as i64);
+        idx = (idx + (r as i64)) & mask;
+    }
+
+    if sum != 0 { return 0; }
+    return 1;
+}

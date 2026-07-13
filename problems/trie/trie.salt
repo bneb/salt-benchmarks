@@ -1,0 +1,93 @@
+// LeetCode 208: Implement Trie (Prefix Tree)
+// Measures insert and search throughput using a manually-managed arena.
+package basalt
+
+import std.core.ptr.Ptr
+import std.core.arena
+
+const NO_CHILD: u32 = 4294967295;
+
+struct TrieNode {
+    children: [u32; 26],
+    is_word: u8
+}
+
+struct TrieArena {
+    data: Ptr<TrieNode>,
+    size: u32,
+    capacity: u32
+}
+
+fn arena_new(capacity: u32) -> Ptr<TrieArena> {
+    let a = arena::alloc(16) as Ptr<TrieArena>;
+    a.data = arena::alloc((capacity as i64) * 108) as Ptr<TrieNode>;
+    a.size = 0;
+    a.capacity = capacity;
+    return a;
+}
+
+fn arena_alloc(a: Ptr<TrieArena>) -> u32 {
+    let idx = a.size;
+    a.size = idx + 1;
+    for i in 0..26 {
+        a.data[idx as i64].children[i] = NO_CHILD;
+    }
+    a.data[idx as i64].is_word = 0;
+    return idx;
+}
+
+fn insert_word(a: Ptr<TrieArena>, root: u32, word: Ptr<u8>, len: i64) {
+    let mut curr = root;
+    for i in 0..len {
+        let idx = (word[i] as i32) - 97;
+        let mut child = a.data[curr as i64].children[idx as i64];
+        if child == NO_CHILD {
+            child = arena_alloc(a);
+            a.data[curr as i64].children[idx as i64] = child;
+        }
+        curr = child;
+    }
+    a.data[curr as i64].is_word = 1;
+}
+
+fn search(a: Ptr<TrieArena>, root: u32, word: Ptr<u8>, len: i64) -> bool {
+    let mut curr = root;
+    for i in 0..len {
+        let idx = (word[i] as i32) - 97;
+        let child = a.data[curr as i64].children[idx as i64];
+        if child == NO_CHILD {
+            return false;
+        }
+        curr = child;
+    }
+    return a.data[curr as i64].is_word != 0;
+}
+
+fn fill_word(word: Ptr<u8>, i: i32) {
+    word[0 as i64] = ((i % 26) + 97) as u8;
+    word[1 as i64] = (((i / 26) % 26) + 97) as u8;
+    word[2 as i64] = (((i / 676) % 26) + 97) as u8;
+    word[3 as i64] = (((i / 17576) % 26) + 97) as u8;
+    word[4 as i64] = ((i % 7) + 97) as u8;
+}
+
+pub fn main() -> i32 {
+    let arena = arena_new(3000000);
+    let root = arena_alloc(arena);
+    let word: [u8; 6];
+
+    for i in 0..700000 {
+        fill_word(word as Ptr<u8>, i);
+        insert_word(arena, root, word as Ptr<u8>, 5);
+    }
+
+    println("Searching 700k words...");
+    let mut found = 0;
+    for i in 0..700000 {
+        fill_word(word as Ptr<u8>, i);
+        if search(arena, root, word as Ptr<u8>, 5) { found += 1; }
+    }
+
+    println(f"Found: {found as i64}");
+    return 0;
+}

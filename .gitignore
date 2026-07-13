@@ -1,0 +1,27 @@
+# Compiled artifacts
+*.o
+*.obj
+*.exe
+*.out
+*.class
+*.pyc
+__pycache__/
+
+# Build directories
+build/
+bin/
+qemu_build/
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Benchmark results
+RESULTS.md

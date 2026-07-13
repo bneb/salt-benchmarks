@@ -1,0 +1,121 @@
+// lru_cache.salt - LeetCode 146: LRU Cache
+// Doubly-linked list + direct-address hash table.
+// Uses arena bump allocator for O(1) allocation and reset.
+
+package main
+
+import std.core.ptr.Ptr;
+import std.core.arena;
+
+struct LRUNode {
+    key: i32,
+    val: i32,
+    prev: Ptr<LRUNode>,
+    next: Ptr<LRUNode>
+}
+
+fn make_node(key: i32, val: i32) -> Ptr<LRUNode> {
+    let n: Ptr<LRUNode> = arena::alloc(32) as Ptr<LRUNode>;
+    n.key = key;
+    n.val = val;
+    n.prev = Ptr::<LRUNode>::empty();
+    n.next = Ptr::<LRUNode>::empty();
+    return n;
+}
+
+struct LRUCache {
+    capacity: i32,
+    count: i32,
+    head: Ptr<LRUNode>,
+    tail: Ptr<LRUNode>,
+    map_ptr: Ptr<Ptr<LRUNode>>,
+    map_capacity: i64
+}
+
+fn cache_create(capacity: i32) -> Ptr<LRUCache> {
+    let raw = arena::alloc(56);
+    let c: Ptr<LRUCache> = raw as Ptr<LRUCache>;
+    c.capacity = capacity;
+    c.count = 0;
+    let head = make_node(0, 0);
+    let tail = make_node(0, 0);
+    c.head = head;
+    c.tail = tail;
+    head.next = tail;
+    tail.prev = head;
+    // Direct-address table for keys 0..9999
+    c.map_capacity = 10000;
+    let map_bytes = c.map_capacity * 8;
+    c.map_ptr = arena::alloc(map_bytes) as Ptr<Ptr<LRUNode>>;
+    for i in 0..c.map_capacity {
+        let p = c.map_ptr.offset(i);
+        p.write(Ptr::<LRUNode>::empty());
+    }
+    return c;
+}
+
+fn remove_node(node: Ptr<LRUNode>) {
+    node.prev.next = node.next;
+    node.next.prev = node.prev;
+}
+
+fn add_to_head(c: Ptr<LRUCache>, node: Ptr<LRUNode>) {
+    let old_first = c.head.next;
+    node.prev = c.head;
+    node.next = old_first;
+    old_first.prev = node;
+    c.head.next = node;
+}
+
+fn get(c: Ptr<LRUCache>, key: i32) -> i32 {
+    if key < 0 || (key as i64) >= c.map_capacity {
+        return -1;
+    }
+    let node = c.map_ptr.offset(key as i64).read();
+    if node {
+        remove_node(node);
+        add_to_head(c, node);
+        return node.val;
+    }
+    return -1;
+}
+
+fn put(c: Ptr<LRUCache>, key: i32, val: i32) {
+    if key < 0 || (key as i64) >= c.map_capacity {
+        return;
+    }
+    let pslot = c.map_ptr.offset(key as i64);
+    let node = pslot.read();
+    if node {
+        node.val = val;
+        remove_node(node);
+        add_to_head(c, node);
+    } else {
+        let new_node = make_node(key, val);
+        pslot.write(new_node);
+        add_to_head(c, new_node);
+        c.count += 1;
+        if c.count > c.capacity {
+            let lru = c.tail.prev;
+            remove_node(lru);
+            let plru_slot = c.map_ptr.offset(lru.key as i64);
+            plru_slot.write(Ptr::<LRUNode>::empty());
+            c.count -= 1;
+        }
+    }
+}
+
+fn main() -> i32 {
+    let mut checksum = 0;
+    for k in 0..1000 {
+        let m = arena::mark();
+        let cache = cache_create(100);
+        for i in 0..1000 {
+            put(cache, i, i * 10);
+            if i % 2 == 0 { checksum += get(cache, i / 2); }
+        }
+        arena::reset_to(m);
+    }
+    println(f"Checksum: {checksum as i64}");
+    return 0;
+}

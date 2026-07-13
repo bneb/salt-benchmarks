@@ -1,0 +1,52 @@
+// Global Counter Benchmark
+//
+// Benchmarks concurrent atomic-style counter increments using a shadow-stack
+// pattern: a global counter is promoted to a local variable, rapid iterations
+// are performed over a scratch buffer with bitwise-AND indexing, then the
+// final value is committed back to the global.
+//
+// Uses raw Ptr + unsafe because Z3 cannot prove bounds derived from
+// bitwise-AND (local_counter & 255). The volatile loop body simulates
+// register promotion in concurrent programs.
+package basalt
+
+import std.core.ptr.Ptr
+import std.core.arena
+
+global COUNTER: i32;
+
+fn main() -> i32 {
+    let n = 256 as i64;
+    let iterations = 50000000 as i64;
+
+    let raw_addr = arena::alloc(n * 4);
+    let mut scratch_ptr: Ptr<i32> = raw_addr as Ptr<i32>;
+
+    // Initialize scratch buffer
+    unsafe {
+        for i in 0..n {
+            invariant i >= 0 && i < n;
+            scratch_ptr[i] = i as i32;
+        }
+    }
+
+    // Shadow stack: promote global counter to local register
+    let mut local_counter: i32 = 0;
+
+    // Hot loop (register-pinned)
+    for iter in 0..iterations {
+        invariant iter >= 0;
+        let idx = (local_counter & 255) as i64;
+        unsafe {
+            let scratch_val = scratch_ptr[idx];
+            local_counter = local_counter + scratch_val;
+            scratch_ptr[idx] = local_counter;
+        }
+    }
+
+    // Commit local to global (demotion)
+    COUNTER = local_counter;
+
+    if COUNTER != 0 { return 0; }
+    return 1;
+}

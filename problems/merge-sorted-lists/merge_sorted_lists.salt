@@ -1,0 +1,85 @@
+// Merge Sorted Lists — LeetCode 21: Merge Two Sorted Linked Lists
+// Arena-allocated linked list merge benchmark
+// Uses Ptr<T> safe methods (.offset(), .read(), .write()) for indexed access.
+
+package basalt
+
+import std.core.arena
+
+const NULL_IDX: i64 = -1;
+
+struct ListNode {
+    val: i32,
+    next: i64,
+}
+
+struct NodeArena {
+    data: Ptr<ListNode>,
+    size: i64,
+    capacity: i64,
+}
+
+fn arena_new(capacity: u32) -> Ptr<NodeArena> {
+    let a = arena::alloc(intrin::size_of::<NodeArena>()) as Ptr<NodeArena>;
+    let data_ptr = Ptr::<ListNode>::from_addr(
+        arena::alloc((capacity as i64) * intrin::size_of::<ListNode>()) as u64);
+    a.data = data_ptr;
+    a.size = 0;
+    a.capacity = capacity as i64;
+    return a;
+}
+
+fn arena_alloc(a: Ptr<NodeArena>, val: i32, next: i64) -> i64 {
+    let idx = a.size;
+    a.size = idx + 1;
+    a.data.offset(idx).write(ListNode { val: val, next: next });
+    return idx;
+}
+
+fn arena_reset(a: Ptr<NodeArena>) {
+    a.size = 0;
+}
+
+fn create_list(a: Ptr<NodeArena>, len: i32, start: i32, step: i32) -> i64 {
+    if len <= 0 { return NULL_IDX; }
+    let next = create_list(a, len - 1, start + step, step);
+    return arena_alloc(a, start, next);
+}
+
+fn merge(a: Ptr<NodeArena>, l1: i64, l2: i64) -> i64 {
+    if l1 < 0 { return l2; }
+    if l2 < 0 { return l1; }
+
+    let node1 = a.data.offset(l1).read();
+    let node2 = a.data.offset(l2).read();
+    if node1.val < node2.val {
+        let merged_next = merge(a, node1.next, l2);
+        a.data.offset(l1).write(ListNode { val: node1.val, next: merged_next });
+        return l1;
+    } else {
+        let merged_next = merge(a, l1, node2.next);
+        a.data.offset(l2).write(ListNode { val: node2.val, next: merged_next });
+        return l2;
+    }
+}
+
+pub fn main() -> i32 {
+    let mut checksum = 0;
+    let arena = arena_new(1000);
+
+    for _i in 0..5000 {
+        arena_reset(arena);
+        let l1 = create_list(arena, 100, 0, 2);
+        let l2 = create_list(arena, 100, 1, 2);
+        let merged = merge(arena, l1, l2);
+
+        let mut curr = merged;
+        while curr != -1 {
+            let node = arena.data.offset(curr).read();
+            checksum += node.val;
+            curr = node.next;
+        }
+    }
+    println(f"Checksum: {checksum as i64}");
+    return 0;
+}
